@@ -40,6 +40,9 @@ const items = () => page.evaluate(() => window.editor.items);
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.waitForFunction(() => window.source);
+  await test("Image menus preserve core/Copy Image entries and clean up on unload", async () => {
+    assert.equal(await page.evaluate(() => window.checkImageMenus()), true);
+  });
   await open("sample.png", true);
   await test("All eight tools render and canvas contains source pixels", async () => {
     assert.equal(await page.locator("button[data-tool]").count(), 8);

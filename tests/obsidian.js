@@ -62,8 +62,10 @@ export class Plugin extends Component {
   addCommand(command) { this.command = command; }
 }
 export class Menu {
-  addItem(callback) { const item = { setTitle() { return item; }, setIcon() { return item; }, onClick(fn) { item.action = fn; return item; } }; callback(item); return this; }
-  showAtPosition() {}
+  items = [];
+  addItem(callback) { const item = { setTitle(title) { item.title = title; return item; }, setIcon() { return item; }, onClick(fn) { item.action = fn; return item; } }; callback(item); this.items.push(item); return this; }
+  showAtMouseEvent(event) { return this.showAtPosition({ x: event.clientX, y: event.clientY }, event.target?.ownerDocument); }
+  showAtPosition(position, doc) { this.shown = { position, doc, native: Menu.useNativeMenu }; return this; }
 }
 
 export function createApp() {
@@ -94,7 +96,7 @@ export function createApp() {
     on
   };
   app.fileManager = { trashFile: file => app.vault.trash(file) };
-  app.workspace = { getActiveFile: () => app.activeFile ?? null, on };
+  app.workspace = { trigger: emit, getActiveFile: () => app.activeFile ?? null, on };
   app.metadataCache = {
     fileToLinktext: file => file.path,
     getFirstLinkpathDest(link) {

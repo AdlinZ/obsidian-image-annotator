@@ -1,3 +1,4 @@
+import { checkImageMenus } from "./menus";
 import { installDom, createApp } from "./obsidian";
 import { ImageAnnotatorModal } from "../src/editor";
 import Plugin from "../src/main";
@@ -8,6 +9,7 @@ import * as embeds from "../src/embeds";
 installDom();
 window.notices = [];
 window.api = { storage, model, embeds };
+window.checkImageMenus = checkImageMenus;
 window.initialize = async () => {
   window.app = createApp();
   window.plugin = new Plugin(window.app);
