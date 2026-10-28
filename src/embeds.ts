@@ -4,18 +4,20 @@ import { toMarkdown } from "mdast-util-to-markdown";
 import type { Image, RootContent } from "mdast";
 import { tr } from "./ui";
 
-export interface EmbedReference { start: number; end: number; raw: string; line: number }
+export interface EmbedReference { start: number; end: number; raw: string; line: number; index: number }
 export interface EmbedContext { note: TFile; preferredIndex?: number }
 
 export async function references(app: App, note: TFile, source: TFile): Promise<EmbedReference[]> {
   const text = await app.vault.read(note);
+  let index = 0;
   return (app.metadataCache.getFileCache(note)?.embeds ?? []).flatMap(embed => {
     const file = app.metadataCache.getFirstLinkpathDest(embed.link, note.path);
     if (file?.path !== source.path) return [];
+    const occurrence = index++;
     const start = embed.position.start.offset, end = embed.position.end.offset;
     const raw = text.slice(start, end);
     if (raw !== embed.original) return [];
-    return [{ start, end, raw, line: embed.position.start.line + 1 }];
+    return [{ start, end, raw, line: embed.position.start.line + 1, index: occurrence }];
   });
 }
 

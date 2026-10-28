@@ -1,17 +1,17 @@
 {
-  "name": "obsidian-image-annotator",
-  "version": "1.0.2",
+  "name": "image-annotator-plus",
+  "version": "1.2.0",
   "private": true,
   "description": "Annotate vault images and save flattened PNG derivatives.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AdlinZ/obsidian-image-annotator.git"
+    "url": "https://github.com/true0899/obsidian-image-annotator.git"
   },
   "bugs": {
-    "url": "https://github.com/AdlinZ/obsidian-image-annotator/issues"
+    "url": "https://github.com/true0899/obsidian-image-annotator/issues"
   },
-  "homepage": "https://github.com/AdlinZ/obsidian-image-annotator#readme",
+  "homepage": "https://github.com/true0899/obsidian-image-annotator#readme",
   "scripts": {
     "build": "tsc --noEmit && node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs development",

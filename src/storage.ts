@@ -36,7 +36,7 @@ export async function readDocument(app: App, file: TFile, bytes: ArrayBuffer): P
   if (!sidecar) return null;
   if (!(sidecar instanceof TFile)) throw new Error("Annotation path is a folder");
   const document = parseDocument(await app.vault.read(sidecar));
-  if (document.outputHash !== await hash(bytes)) throw new Error("Image changed outside Image Annotator");
+  if (document.outputHash !== await hash(bytes)) throw new Error("Image changed outside Image Annotator Plus");
   return document;
 }
 

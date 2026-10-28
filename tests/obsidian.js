@@ -62,8 +62,10 @@ export class Plugin extends Component {
   addCommand(command) { this.command = command; }
 }
 export class Menu {
-  addItem(callback) { const item = { setTitle() { return item; }, setIcon() { return item; }, onClick(fn) { item.action = fn; return item; } }; callback(item); return this; }
-  showAtPosition() {}
+  items = [];
+  addItem(callback) { const item = { setTitle(title) { item.title = title; return item; }, setIcon() { return item; }, onClick(fn) { item.action = fn; return item; } }; callback(item); this.items.push(item); return this; }
+  showAtMouseEvent(event) { return this.showAtPosition({ x: event.clientX, y: event.clientY }, event.target?.ownerDocument); }
+  showAtPosition(position, doc) { this.shown = { position, doc, native: Menu.useNativeMenu }; return this; }
 }
 
 export function createApp() {
@@ -83,6 +85,7 @@ export function createApp() {
     },
     async read(file) { return new TextDecoder().decode(await this.readBinary(file)); },
     async readBinary(file) { if (!entries.has(file.path)) throw new Error("File missing"); return entries.get(file.path).bytes.slice(0); },
+    getResourcePath(file) { return `app://local/${encodeURIComponent(file.path)}`; },
     async modify(file, value) { return this.modifyBinary(file, new TextEncoder().encode(value).buffer); },
     async modifyBinary(file, bytes) {
       if (this.fail === "modifyBinary" && file.path.endsWith(".png")) { this.fail = null; throw new Error("Injected update failure"); }
@@ -94,7 +97,7 @@ export function createApp() {
     on
   };
   app.fileManager = { trashFile: file => app.vault.trash(file) };
-  app.workspace = { getActiveFile: () => app.activeFile ?? null, on };
+app.workspace = { trigger: emit, getActiveFile: () => app.activeFile ?? null, getLeavesOfType: () => [], on };
   app.metadataCache = {
     fileToLinktext: file => file.path,
     getFirstLinkpathDest(link) {

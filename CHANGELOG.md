@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.0
+
+- Rename the plugin to **Image Annotator Plus** and switch to the
+  `image-annotator-plus` plugin id, so the plugin can be listed in the Obsidian
+  Community directory.
+- Include every change from 1.1.0: the straight line tool, Shift-to-snap
+  drawing, the image context-menu fix, and post-save preview refreshes.
+- Install into `<vault>/.obsidian/plugins/image-annotator-plus/`. Do not install
+  it alongside the original Image Annotator: both plugins read and write the
+  same `.annotator.json` companion files.
+
+## 1.1.0
+
+- Add a straight line tool, and snap lines and arrows to 45-degree increments
+  while Shift is held.
+- Keep Obsidian's own image context-menu entries and append **Annotate image**
+  to them instead of replacing the menu, so Copy image, Rename, and Reveal in
+  Finder stay available when native menus are enabled.
+- Refresh the image previews of open notes after a successful save.
+- Drop the Image Converter-specific menu patch and its polling timer.
+
 ## 1.0.2
 
 - Edit individual annotations: selection, movement, resizing, deletion, styles,

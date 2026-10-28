@@ -1,5 +1,5 @@
 export interface Point { x: number; y: number }
-export type DrawTool = "rect" | "arrow" | "pen" | "text" | "number" | "redact" | "highlight";
+export type DrawTool = "rect" | "line" | "arrow" | "pen" | "text" | "number" | "redact" | "highlight";
 export type Tool = "select" | DrawTool;
 export interface Item {
   type: DrawTool;
@@ -26,11 +26,11 @@ export function preferences(value: unknown): Preferences {
 
 export function validItems(value: unknown): value is Item[] {
   return Array.isArray(value) && value.length <= 10000 && value.every((item: Partial<Item> | null) => {
-    if (!item || !["rect", "arrow", "pen", "text", "number", "redact", "highlight"].includes(item.type ?? "")) return false;
+    if (!item || !["rect", "line", "arrow", "pen", "text", "number", "redact", "highlight"].includes(item.type ?? "")) return false;
     if (typeof item.color !== "string" || !/^#[\da-f]{6}$/i.test(item.color)) return false;
     if (!Number.isFinite(item.width) || item.width! < 1 || item.width! > 30 || !Number.isFinite(item.size) || item.size! < 10 || item.size! > 160) return false;
     if (!Array.isArray(item.points) || !item.points.length || item.points.length > 100000 || !item.points.every(p => p && Number.isFinite(p.x) && Number.isFinite(p.y))) return false;
-    if (["rect", "arrow", "redact", "highlight"].includes(item.type!) && item.points.length !== 2) return false;
+    if (["rect", "line", "arrow", "redact", "highlight"].includes(item.type!) && item.points.length !== 2) return false;
     if (item.type === "text" && (typeof item.text !== "string" || item.text.length > 10000)) return false;
     return item.type !== "number" || (Number.isInteger(item.number) && item.number! > 0 && item.number! <= 9999);
   });
@@ -61,7 +61,7 @@ function distance(p: Point, a: Point, b: Point): number {
 }
 
 export function hitTest(item: Item, p: Point, ctx: CanvasRenderingContext2D, tolerance: number): boolean {
-  if (item.type === "arrow" || item.type === "pen") {
+  if (["line", "arrow", "pen"].includes(item.type)) {
     for (let i = 1; i < item.points.length; i++) if (distance(p, item.points[i - 1], item.points[i]) <= tolerance + item.width / 2) return true;
     return false;
   }

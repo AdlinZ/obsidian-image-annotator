@@ -1,13 +1,14 @@
 import { App, Component, Modal, Notice, TFile, normalizePath } from "obsidian";
 import { bounds, clamp, clone, defaults, drawItem, hitTest, Item, moveItem, Point, Preferences, Tool } from "./model";
 import { hash, imageData, readDocument, SIDECAR, writeDocument } from "./storage";
-import { chooseEmbeds, EmbedContext, replaceEmbeds } from "./embeds";
+import { chooseEmbeds, EmbedContext, EmbedReference, replaceEmbeds } from "./embeds";
 import { confirmDiscard, iconButton, promptValue, tr } from "./ui";
 
 export interface EditorHost {
   preferences: Preferences;
   remember(value: Preferences): void;
   savingPaths: Set<string>;
+  refreshMarkdownImages(note: TFile, source: TFile, target: TFile, outputHash: string, refs: EmbedReference[]): void;
 }
 
 export class ImageAnnotatorModal extends Modal {
@@ -94,7 +95,7 @@ export class ImageAnnotatorModal extends Modal {
     this.refresh();
     void this.load().catch(error => {
       if (this.closed) return;
-      console.error("Image Annotator: load failed", error);
+      console.error("Image Annotator Plus: load failed", error);
       new Notice(tr("无法打开标注数据：图片或标注文件已变化或损坏。原文件保持不变。", "Could not open annotations: the image or annotation file changed or is invalid. Original files are unchanged."));
       this.closed = true;
       super.close();
@@ -154,6 +155,7 @@ export class ImageAnnotatorModal extends Modal {
   private buildToolbar(): void {
     const tools: Array<[Tool, string, string]> = [
       ["select", "mouse-pointer-2", tr("选择", "Select")], ["rect", "square", tr("矩形", "Rectangle")],
+      ["line", "minus", tr("直线", "Line")],
       ["arrow", "arrow-up-right", tr("箭头", "Arrow")], ["pen", "pencil", tr("画笔", "Pen")],
       ["text", "type", tr("文字", "Text")], ["number", "list-ordered", tr("编号", "Number")],
       ["redact", "square-dashed-bottom-code", tr("实心遮挡", "Solid redaction")], ["highlight", "highlighter", tr("高亮", "Highlight")]
@@ -246,6 +248,16 @@ export class ImageAnnotatorModal extends Modal {
     return { x: clamp((event.clientX - rect.left) / this.zoom, 0, this.canvas.width), y: clamp((event.clientY - rect.top) / this.zoom, 0, this.canvas.height) };
   }
 
+  /** Snap a Shift-drawn line or arrow to the nearest 45-degree increment. */
+  private constrainLinePoint(start: Point, end: Point): Point {
+    const dx = end.x - start.x, dy = end.y - start.y;
+    const length = Math.hypot(dx, dy);
+    if (!length) return end;
+    const increment = Math.PI / 4;
+    const angle = Math.round(Math.atan2(dy, dx) / increment) * increment;
+    return { x: start.x + length * Math.cos(angle), y: start.y + length * Math.sin(angle) };
+  }
+
   private pointerDown = (event: PointerEvent): void => {
     if (!this.ready || this.busy || this.prompting || this.drag || event.button !== 0 && event.button !== 1) return;
     if (event.target !== this.canvas && !this.spaceDown && !this.panMode && event.button !== 1) return;
@@ -293,6 +305,8 @@ export class ImageAnnotatorModal extends Modal {
       if (this.draft.type === "pen") {
         const previous = this.draft.points[this.draft.points.length - 1];
         if (Math.hypot(p.x - previous.x, p.y - previous.y) > 0.7 / this.zoom && this.draft.points.length < 100000) this.draft.points.push(p);
+      } else if (["line", "arrow"].includes(this.draft.type) && event.shiftKey) {
+        this.draft.points[1] = this.constrainLinePoint(this.draft.points[0], p);
       } else this.draft.points[1] = p;
     } else if (drag.kind === "move") {
       this.items[this.selected] = moveItem(drag.before[this.selected], p.x - drag.start.x, p.y - drag.start.y);
@@ -315,7 +329,7 @@ export class ImageAnnotatorModal extends Modal {
     if (cancel) this.items = drag.before;
     else if (this.draft) {
       const first = this.draft.points[0], last = this.draft.points[this.draft.points.length - 1];
-      const valid = this.draft.type === "pen" ? this.draft.points.length > 1 : this.draft.type === "arrow" ? Math.hypot(last.x - first.x, last.y - first.y) > 2 : Math.abs(last.x - first.x) > 2 && Math.abs(last.y - first.y) > 2;
+      const valid = this.draft.type === "pen" ? this.draft.points.length > 1 : ["line", "arrow"].includes(this.draft.type) ? Math.hypot(last.x - first.x, last.y - first.y) > 2 : Math.abs(last.x - first.x) > 2 && Math.abs(last.y - first.y) > 2;
       if (valid) this.items.push(this.draft);
     }
     this.draft = null;
@@ -430,7 +444,7 @@ export class ImageAnnotatorModal extends Modal {
     try {
       const writing = navigator.clipboard.write([new ClipboardItem({ "image/png": this.png() })]);
       void writing.then(() => new Notice(tr("图片已复制", "Image copied"))).catch(error => {
-        console.error("Image Annotator: clipboard failed", error); new Notice(tr("复制失败，请检查剪贴板权限", "Copy failed; check clipboard permissions"));
+        console.error("Image Annotator Plus: clipboard failed", error); new Notice(tr("复制失败，请检查剪贴板权限", "Copy failed; check clipboard permissions"));
       }).finally(() => { this.busy = false; this.refresh(); });
     } catch (error) { console.error(error); this.busy = false; this.refresh(); new Notice(tr("复制图片失败", "Could not copy image")); }
   }
@@ -451,6 +465,7 @@ export class ImageAnnotatorModal extends Modal {
     try {
       if (this.file.path !== this.initialPath) throw new Error("Image moved while editing; reopen it before saving");
       const targetPath = this.outputPath();
+      const source = this.file;
       if (this.host.savingPaths.has(targetPath)) throw new Error("Another editor is saving this image");
       this.host.savingPaths.add(targetPath); lockedPath = targetPath;
       const refs = targetPath !== this.file.path ? await chooseEmbeds(this.app, this.embedContext, this.file) : [];
@@ -459,14 +474,18 @@ export class ImageAnnotatorModal extends Modal {
       const target = await writeDocument(this.app, targetPath, bytes, { version: 1, baseImage: this.baseImage, sourcePath: this.sourcePath, outputHash, items: clone(this.items) }, targetPath === this.file.path ? this.originalHash : null);
       this.savedState = JSON.stringify(this.items);
       this.file = target; this.initialPath = target.path; this.originalHash = outputHash;
+      let referencesReplaced = target.path === source.path;
       if (refs.length && this.embedContext) {
-        try { await replaceEmbeds(this.app, this.embedContext.note, target, refs); }
-        catch (error) { console.error("Image Annotator: reference replacement failed", error); new Notice(tr("图片已保存，但引用未替换：笔记已变化或引用格式不支持。", "Image saved, but embeds were not replaced: the note changed or its syntax is unsupported.")); }
+        try {
+          await replaceEmbeds(this.app, this.embedContext.note, target, refs);
+          referencesReplaced = true;
+        } catch (error) { console.error("Image Annotator Plus: reference replacement failed", error); new Notice(tr("图片已保存，但引用未替换：笔记已变化或引用格式不支持。", "Image saved, but embeds were not replaced: the note changed or its syntax is unsupported.")); }
       }
+      if (this.embedContext && referencesReplaced) this.host.refreshMarkdownImages(this.embedContext.note, source, target, outputHash, refs);
       new Notice(`${tr("已保存", "Saved")}: ${target.path}`);
       this.closed = true; super.close();
     } catch (error) {
-      console.error("Image Annotator: save failed", error);
+      console.error("Image Annotator Plus: save failed", error);
       new Notice(tr("保存失败。请检查文件是否被移动、修改或占用，然后重试。", "Save failed. Check whether files were moved, modified, or locked, then retry."));
     } finally { if (lockedPath) this.host.savingPaths.delete(lockedPath); this.busy = false; if (!this.closed) this.refresh(); }
   }

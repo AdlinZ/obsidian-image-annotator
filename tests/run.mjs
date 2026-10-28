@@ -40,11 +40,14 @@ const items = () => page.evaluate(() => window.editor.items);
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.waitForFunction(() => window.source);
+  await test("Image menus preserve core/Copy Image entries and clean up on unload", async () => {
+    assert.equal(await page.evaluate(() => window.checkImageMenus()), true);
+  });
   await open("sample.png", true);
-  await test("All eight tools render and canvas contains source pixels", async () => {
-    assert.equal(await page.locator("button[data-tool]").count(), 8);
+  await test("All nine tools render and canvas contains source pixels", async () => {
+    assert.equal(await page.locator("button[data-tool]").count(), 9);
     assert.equal(await page.evaluate(() => window.editor.ctx.getImageData(1, 1, 1, 1).data[3]), 255);
-    assert.equal(await page.locator(".vf-ia-toolbar svg").count(), 19);
+    assert.equal(await page.locator(".vf-ia-toolbar svg").count(), 20);
   });
   await test("Rectangle, arrow, pen, redaction and highlight gestures", async () => {
     await draw("rect", [40, 100], [360, 155]);
@@ -225,6 +228,63 @@ try {
       }); assert.equal(overflow, 0, JSON.stringify(viewport));
       if (viewport.width === 390) await page.screenshot({ path: `${qa}/mobile.png` });
     }
+  });
+  await test("Line tool draws plain lines and Shift snaps to 45-degree directions", async () => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator('[data-tool="line"]').click();
+    const box = await page.locator("canvas").boundingBox();
+    const pos = (x, y) => [box.x + x * box.width / 1200, box.y + y * box.height / 720];
+    await page.mouse.move(...pos(100, 100));
+    await page.mouse.down(); await page.mouse.move(...pos(250, 180), { steps: 5 }); await page.mouse.up();
+    await page.mouse.move(...pos(300, 400));
+    await page.keyboard.down("Shift");
+    await page.mouse.down(); await page.mouse.move(...pos(420, 520), { steps: 5 }); await page.mouse.up();
+    await page.keyboard.up("Shift");
+    const lines = (await items()).filter(item => item.type === "line").slice(-2);
+    assert.equal(lines.length, 2);
+    assert.equal(lines[0].points.length, 2);
+    const dx = lines[1].points[1].x - lines[1].points[0].x;
+    const dy = lines[1].points[1].y - lines[1].points[0].y;
+    assert.ok(Math.abs(Math.abs(dx) - Math.abs(dy)) < 1, "Shift line should snap to 45 degrees");
+  });
+  await test("Shift constrains arrows to all 45-degree directions", async () => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator('[data-tool="arrow"]').click();
+    const box = await page.locator("canvas").boundingBox();
+    const pos = (x, y) => [box.x + x * box.width / 1200, box.y + y * box.height / 720];
+    await page.mouse.move(...pos(300, 300));
+    await page.keyboard.down("Shift");
+    await page.mouse.down(); await page.mouse.move(...pos(500, 360), { steps: 5 }); await page.mouse.up();
+    await page.keyboard.up("Shift");
+    await page.mouse.move(...pos(700, 300));
+    await page.keyboard.down("Shift");
+    await page.mouse.down(); await page.mouse.move(...pos(730, 500), { steps: 5 }); await page.mouse.up();
+    await page.keyboard.up("Shift");
+    await page.mouse.move(...pos(400, 300));
+    await page.keyboard.down("Shift");
+    await page.mouse.down(); await page.mouse.move(...pos(520, 420), { steps: 5 }); await page.mouse.up();
+    await page.keyboard.up("Shift");
+    await page.mouse.move(...pos(650, 500));
+    await page.keyboard.down("Shift");
+    await page.mouse.down(); await page.mouse.move(...pos(770, 380), { steps: 5 }); await page.mouse.up();
+    await page.keyboard.up("Shift");
+    await page.mouse.move(...pos(800, 500));
+    await page.keyboard.down("Shift");
+    await page.mouse.down(); await page.mouse.move(...pos(680, 380), { steps: 5 }); await page.mouse.up();
+    await page.keyboard.up("Shift");
+    const arrows = (await items()).filter(item => item.type === "arrow").slice(-5);
+    assert.equal(arrows.length, 5);
+    assert.ok(Math.abs(arrows[0].points[1].y - arrows[0].points[0].y) < 1, "first arrow should be horizontal");
+    assert.ok(Math.abs(arrows[1].points[1].x - arrows[1].points[0].x) < 1, "second arrow should be vertical");
+    const diagonal = arrows[2].points[1].x - arrows[2].points[0].x;
+    const diagonalY = arrows[2].points[1].y - arrows[2].points[0].y;
+    assert.ok(Math.abs(Math.abs(diagonal) - Math.abs(diagonalY)) < 1, "third arrow should be diagonal at 45 degrees");
+    const negativeDiagonal = arrows[3].points[1].x - arrows[3].points[0].x;
+    const negativeDiagonalY = arrows[3].points[1].y - arrows[3].points[0].y;
+    assert.ok(negativeDiagonal > 0 && negativeDiagonalY < 0 && Math.abs(negativeDiagonal + negativeDiagonalY) < 1, "fourth arrow should be -45 degrees");
+    const reverseNegativeDiagonal = arrows[4].points[1].x - arrows[4].points[0].x;
+    const reverseNegativeDiagonalY = arrows[4].points[1].y - arrows[4].points[0].y;
+    assert.ok(reverseNegativeDiagonal < 0 && reverseNegativeDiagonalY < 0 && Math.abs(reverseNegativeDiagonal - reverseNegativeDiagonalY) < 1, "fifth arrow should be -135 degrees");
   });
   assert.deepEqual(errors, []);
   console.log(`PASS ${count} checks; screenshots: work/qa/desktop.png and work/qa/mobile.png`);

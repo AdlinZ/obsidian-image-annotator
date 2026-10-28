@@ -1,10 +1,10 @@
 {
-  "id": "image-annotator",
-  "name": "Image Annotator",
-  "version": "1.0.2",
+  "id": "image-annotator-plus",
+  "name": "Image Annotator Plus",
+  "version": "1.2.0",
   "minAppVersion": "1.8.7",
-  "description": "Annotate images in your vault with rectangles, arrows, text, and freehand marks, then save the result as a PNG.",
-  "author": "AdlinZ",
-  "authorUrl": "https://github.com/AdlinZ",
+  "description": "Annotate images in your vault with rectangles, lines, arrows, text, and freehand marks, then save the result as a PNG.",
+  "author": "Robert",
+  "authorUrl": "https://github.com/true0899",
   "isDesktopOnly": false
 }
